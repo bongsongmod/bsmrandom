@@ -824,28 +824,59 @@ window.onclick = function(event) {
 }
 
 // jsPDF 및 autoTable 플러그인 동적 로드
-(function() {
+function loadPDFLibraries() {
+  if (typeof window.jspdfLoaded === 'undefined') {
+    window.jspdfLoaded = false;
+    window.jspdfAutoTableLoaded = false;
+  }
+  
   if (!window.jspdfLoaded) {
+    console.log('jsPDF 로드 시작');
     var script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
     script.onload = function() {
+      console.log('jsPDF 로드 완료');
       window.jspdfLoaded = true;
       // autoTable 플러그인도 로드
       if (!window.jspdfAutoTableLoaded) {
+        console.log('autoTable 로드 시작');
         var autoTableScript = document.createElement('script');
         autoTableScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js';
-        autoTableScript.onload = function() { window.jspdfAutoTableLoaded = true; };
+        autoTableScript.onload = function() { 
+          console.log('autoTable 로드 완료');
+          window.jspdfAutoTableLoaded = true; 
+        };
+        autoTableScript.onerror = function() {
+          console.error('autoTable 로드 실패');
+        };
         document.head.appendChild(autoTableScript);
       }
     };
+    script.onerror = function() {
+      console.error('jsPDF 로드 실패');
+    };
     document.head.appendChild(script);
   } else if (!window.jspdfAutoTableLoaded) {
+    console.log('autoTable 로드 시작 (jsPDF는 이미 로드됨)');
     var autoTableScript = document.createElement('script');
     autoTableScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js';
-    autoTableScript.onload = function() { window.jspdfAutoTableLoaded = true; };
+    autoTableScript.onload = function() { 
+      console.log('autoTable 로드 완료');
+      window.jspdfAutoTableLoaded = true; 
+    };
+    autoTableScript.onerror = function() {
+      console.error('autoTable 로드 실패');
+    };
     document.head.appendChild(autoTableScript);
   }
-})();
+}
+
+// 페이지 로드 시 PDF 라이브러리 로드
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', loadPDFLibraries);
+} else {
+  loadPDFLibraries();
+}
 
 // PDF 설정 모달 열기
 function openPDFSettingsModal() {
@@ -872,6 +903,13 @@ function closePDFSettingsModal() {
 
 // PDF 다운로드 함수 (옵션 적용)
 function downloadPDFWithOptions() {
+  console.log('PDF 다운로드 시작');
+  console.log('window.jspdfLoaded:', window.jspdfLoaded);
+  console.log('window.jspdf:', window.jspdf);
+  console.log('window.jspdf.jsPDF:', window.jspdf ? window.jspdf.jsPDF : 'undefined');
+  console.log('window.jspdf.jsPDF.API:', window.jspdf && window.jspdf.jsPDF ? window.jspdf.jsPDF.API : 'undefined');
+  console.log('window.jspdf.jsPDF.API.autoTable:', window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API ? window.jspdf.jsPDF.API.autoTable : 'undefined');
+  
   if (
     !window.jspdfLoaded ||
     !window.jspdf ||
@@ -879,28 +917,53 @@ function downloadPDFWithOptions() {
     !window.jspdf.jsPDF.API ||
     typeof window.jspdf.jsPDF.API.autoTable !== 'function'
   ) {
+    console.log('PDF 라이브러리 로드 실패');
     alert('PDF 라이브러리가 아직 로드되지 않았거나 autoTable 플러그인이 연결되지 않았습니다. 잠시 후 다시 시도해주세요.');
     return;
   }
+  
+  console.log('jsPDF 인스턴스 생성 시도');
   const doc = new window.jspdf.jsPDF();
+  console.log('jsPDF 인스턴스 생성 완료:', doc);
+  console.log('doc.autoTable 초기 상태:', typeof doc.autoTable);
+
+  // 강제 연결 시도
+  if (typeof doc.autoTable !== 'function' && typeof window.jspdf.jsPDF.API.autoTable === 'function') {
+    console.log('autoTable 강제 연결 시도');
+    doc.autoTable = window.jspdf.jsPDF.API.autoTable.bind(doc);
+    console.log('autoTable 강제 연결 후:', typeof doc.autoTable);
+  }
+
   if (typeof doc.autoTable !== 'function') {
+    console.log('autoTable 연결 실패');
     alert('autoTable 플러그인이 정상적으로 연결되지 않았습니다. 네트워크 환경을 확인하거나 새로고침 해주세요.');
     closePDFSettingsModal();
     return;
   }
+  
+  console.log('옵션 읽기 시작');
   // 옵션 읽기
   const form = document.getElementById('pdfOptionsForm');
   const checked = Array.from(form.elements['pdfField']).filter(cb => cb.checked).map(cb => cb.value);
+  console.log('선택된 옵션:', checked);
   if (checked.length === 0) {
     alert('최소 1개 이상의 항목을 선택하세요.');
     return;
   }
 
+  console.log('추첨 정보 읽기 시작');
   // 추첨 정보
   const drawName = document.getElementById('resultDrawName').textContent;
   const dateTime = document.getElementById('resultDateTime').textContent;
   const totalParticipants = document.getElementById('resultTotalParticipants').textContent;
   const winnerCount = document.getElementById('resultWinnerCount').textContent;
+
+  // 맑은고딕 폰트 등록 및 적용
+  if (typeof _fonts !== 'undefined') {
+    doc.addFileToVFS('malgun.ttf', _fonts);
+    doc.addFont('malgun.ttf', 'malgun', 'normal');
+    doc.setFont('malgun');
+  }
 
   let y = 15;
   doc.setFontSize(18);
@@ -917,10 +980,13 @@ function downloadPDFWithOptions() {
   if (checked.includes('number')) headers.push('번호');
   if (checked.includes('name')) headers.push('이름');
   if (checked.includes('phone')) headers.push('전화번호');
+  console.log('표 헤더:', headers);
 
+  console.log('표 데이터 처리 시작');
   // 표 데이터
   const tableBody = document.getElementById('resultsTableBody');
   const rows = Array.from(tableBody.querySelectorAll('tr'));
+  console.log('테이블 행 수:', rows.length);
   let data = [];
   rows.forEach((row, idx) => {
     let cols = row.querySelectorAll('td');
@@ -930,6 +996,7 @@ function downloadPDFWithOptions() {
     if (cols.length > 1) {
       // 이름/번호/전화번호가 한 셀에 있을 수 있음
       const info = cols[1].textContent;
+      console.log(`행 ${idx + 1} 정보:`, info);
       // 이름(번호) 형태 분리
       const match = info.match(/([가-힣a-zA-Z0-9]+)(\((\d+)\))?/);
       if (match) {
@@ -947,22 +1014,53 @@ function downloadPDFWithOptions() {
     if (checked.includes('phone')) rowData.push(phone);
     data.push(rowData);
   });
+  console.log('표 데이터:', data);
 
-  // 표 그리기
-  doc.autoTable({
-    head: [headers],
-    body: data,
-    startY: y,
-    styles: { font: 'malgun', fontSize: 11 },
-    headStyles: { fillColor: [52, 152, 219] },
-    margin: { left: 15, right: 15 }
-  });
+  console.log('autoTable 실행 시도');
+  try {
+    // malgun.ttf 폰트 등록 및 적용
+    console.log('_fonts 변수 확인:', typeof _fonts);
+    console.log('_fonts 길이:', _fonts ? _fonts.length : 'undefined');
+    if (typeof _fonts !== 'undefined') {
+      console.log('malgun.ttf 폰트 등록 시작');
+      doc.addFileToVFS('malgun.ttf', _fonts);
+      doc.addFont('malgun.ttf', 'malgun', 'normal');
+      doc.setFont('malgun');
+      console.log('malgun.ttf 폰트 등록 완료');
+    } else {
+      console.error('_fonts 변수가 정의되지 않았습니다. malgungothic.js가 제대로 로드되지 않았을 수 있습니다.');
+    }
+    // 표 그리기
+    doc.autoTable({
+      head: [headers],
+      body: data,
+      startY: y,
+      styles: { font: typeof _fonts !== 'undefined' ? 'malgun' : undefined, fontSize: 11 },
+      headStyles: { fillColor: [52, 152, 219] },
+      margin: { left: 15, right: 15 }
+    });
+    console.log('autoTable 실행 성공');
+  } catch (error) {
+    console.error('autoTable 실행 오류:', error);
+    alert('PDF 표 생성 중 오류가 발생했습니다: ' + error.message);
+    closePDFSettingsModal();
+    return;
+  }
 
+  console.log('하단 문구 추가');
   // 하단 문구
   doc.setFontSize(10);
   doc.text('brought to you by BSM', 105, 285, { align: 'center' });
 
-  doc.save(`${drawName}_결과.pdf`);
+  console.log('PDF 저장 시도');
+  try {
+    doc.save(`${drawName}_결과.pdf`);
+    console.log('PDF 저장 성공');
+  } catch (error) {
+    console.error('PDF 저장 오류:', error);
+    alert('PDF 저장 중 오류가 발생했습니다: ' + error.message);
+  }
+  
   closePDFSettingsModal();
 }
 
