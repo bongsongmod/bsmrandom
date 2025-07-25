@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BSM 랜덤 추첨 시스템</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>BSM 랜덤 추첨 시스템</h1>
+      <p>투명하고 공정한 추첨을 위한 추첨 시스템</p>
+    </div>
+
+    <!-- 추첨 설정 화면 -->
+    <div id="setupScreen" class="screen active">
+      <div class="screen-header">
+        <h2>추첨 설정</h2>
+      </div>
+      <div class="screen-content">
+        <div class="form-group">
+          <label for="drawName">추첨명</label>
+          <input type="text" id="drawName" placeholder="추첨 이벤트명을 입력하세요">
+        </div>
+
+        <div class="form-group">
+          <label for="totalParticipants">추첨 참여자 수</label>
+          <input type="number" id="totalParticipants" min="1" placeholder="예: 100">
+        </div>
+
+        <div class="form-group">
+          <label>당첨자 수 설정</label>
+          <div id="prizeTiers">
+            <div class="prize-tier">
+              <span class="tier-label">당첨자</span>
+              <input type="number" class="prize-count" min="1" placeholder="당첨자 수" value="1">
+            </div>
+          </div>
+          <div class="add-tier-btn">
+            <button type="button" class="btn btn-secondary btn-small" onclick="addPrizeTier()">+ 등수 추가</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>참가자 설정</label>
+          <div class="participant-options">
+            <button type="button" class="btn btn-secondary btn-small" onclick="openParticipantInput()">참가자 직접 입력</button>
+            <span style="margin: 0 10px;">또는</span>
+            <label for="csvFile" class="btn btn-secondary btn-small" style="margin: 0; cursor: pointer;">CSV 파일 업로드</label>
+            <input type="file" id="csvFile" accept=".csv" onchange="handleCSVUpload(this)" style="display: none;">
+          </div>
+          <div class="info-message" style="margin-top: 10px;">
+            <strong>CSV 파일 형식:</strong> 번호,이름,전화번호<br>
+            <strong>예시:</strong> 1,홍길동,010-1234-5678<br>
+            <strong>적용 순서:</strong> 1번부터 순차적으로 적용됩니다<br>
+            <strong>주의:</strong> CSV 내 번호는 총 참여인원 범위 내에서만 유효합니다
+          </div>
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="startDraw()">추첨 시작</button>
+          <button class="btn btn-danger" onclick="resetSystem()">초기화</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 추첨 진행 화면 -->
+    <div id="drawScreen" class="screen">
+      <div class="screen-header">
+        <h2 id="drawTitle">추첨 진행중</h2>
+      </div>
+      <div class="screen-content">
+        <div class="draw-container">
+          <div class="numbers-grid" id="numbersGrid"></div>
+          <div class="winners-panel">
+            <h3>당첨자 발표</h3>
+            <div class="winners-display" id="winnersDisplay"></div>
+            <div class="btn-group">
+              <button class="btn btn-success" id="drawButton" onclick="drawNext()">추첨하기</button>
+              <button class="btn btn-secondary" onclick="finishDraw()" style="display: none;" id="finishButton">추첨 완료</button>
+            </div>
+          </div>
+        </div>
+        <div class="cancel-link" onclick="cancelDraw()">추첨 취소</div>
+      </div>
+    </div>
+
+    <!-- 추첨 결과 화면 -->
+    <div id="resultScreen" class="screen">
+      <div class="screen-header">
+        <h2>추첨 결과</h2>
+      </div>
+      <div class="screen-content">
+        <div class="result-summary">
+          <div class="summary-card">
+            <h3>추첨명</h3>
+            <div class="value" id="resultDrawName">-</div>
+          </div>
+          <div class="summary-card">
+            <h3>추첨 일시</h3>
+            <div class="value" id="resultDateTime">-</div>
+          </div>
+          <div class="summary-card">
+            <h3>총 참여자</h3>
+            <div class="value" id="resultTotalParticipants">-</div>
+          </div>
+          <div class="summary-card">
+            <h3>당첨자 수</h3>
+            <div class="value" id="resultWinnerCount">-</div>
+          </div>
+        </div>
+
+        <table class="results-table">
+          <thead id="resultsTableHead">
+            <tr>
+              <th>순번</th>
+              <th>당첨자 정보</th>
+            </tr>
+          </thead>
+          <tbody id="resultsTableBody">
+          </tbody>
+        </table>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="openPDFSettingsModal()">PDF로 다운로드</button>
+          <button class="btn btn-primary" onclick="downloadResults()">결과 다운로드</button>
+          <button class="btn btn-secondary" onclick="modifyDraw()">추첨 수정</button>
+          <button class="btn btn-danger" onclick="resetSystem()">초기화</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 참가자 입력 모달 -->
+    <div id="participantModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>참가자 직접 입력</h3>
+          <span class="close" onclick="closeParticipantModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="input-section">
+            <input type="text" id="participantInput" placeholder="참가자 이름을 입력하고 엔터를 누르세요" onkeydown="handleParticipantKeydown(event)" onkeypress="handleParticipantKeypress(event)">
+            <button type="button" class="btn btn-primary btn-small" onclick="addParticipant()">추가</button>
+          </div>
+          <div class="multiplier-section-full">
+            <label for="multiplierInput">전체 배율:</label>
+            <input type="number" id="multiplierInput" min="1" max="10" value="1" class="multiplier-input" onchange="updateGlobalMultiplier()">
+            <span class="multiplier-info">모든 참가자에게 동일하게 적용됩니다</span>
+          </div>
+          <div class="participant-list">
+            <h4>입력된 참가자 목록 (<span id="participantCount">총 0명</span>)</h4>
+            <div id="participantListDisplay"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeParticipantModal()">취소</button>
+          <button type="button" class="btn btn-primary" onclick="completeParticipantInput()">완료</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 프로그램 설명 화면 -->
+    <div id="infoScreen" class="screen">
+      <div class="screen-header">
+        <h2>프로그램 설명</h2>
+      </div>
+      <div class="screen-content">
+        <div class="info-section">
+          <h3>🔐 암호학적 난수 생성 기술</h3>
+          <p>본 추첨 시스템은 <strong>crypto.getRandomValues()</strong> 웹 표준 API를 사용하여 추첨을 진행합니다.</p>
+          <ul>
+            <li><strong>암호학적 보안:</strong> 예측 불가능한 진정한 난수 생성</li>
+            <li><strong>국제 표준:</strong> W3C 웹 표준 및 RFC 4086 준수</li>
+            <li><strong>정부 기관 사용:</strong> 미국 NIST, 유럽 보안기관 등에서 공식 채택</li>
+            <li><strong>금융권 적용:</strong> 은행, 보험사 등 금융 기관에서 사용하는 동일한 기술</li>
+          </ul>
+        </div>
+
+        <div class="info-section">
+          <h3>⚡ 추첨 과정의 투명성</h3>
+          <ul>
+            <li><strong>실시간 시각화:</strong> 추첨 과정이 화면에 실시간으로 표시됩니다</li>
+            <li><strong>조작 불가:</strong> 사전 결정된 결과나 인위적 조작이 불가능합니다</li>
+            <li><strong>완전 무작위:</strong> 모든 참여자가 동일한 당첨 확률을 가집니다</li>
+            <li><strong>결과 기록:</strong> 추첨 일시와 결과가 자동으로 기록됩니다</li>
+          </ul>
+        </div>
+
+        <div class="info-section">
+          <h3>🏛️ 공신력 및 신뢰성</h3>
+          <p>본 시스템은 다음과 같은 기관들이 사용하는 동일한 기술을 적용했습니다:</p>
+          <ul>
+            <li><strong>정부 기관:</strong> 각국 정부의 공식 추첨 및 선발 과정</li>
+            <li><strong>금융 기관:</strong> 은행의 보안 키 생성 및 암호화</li>
+            <li><strong>연구 기관:</strong> 과학 연구의 무작위 샘플링</li>
+            <li><strong>국제 기구:</strong> 유엔, WHO 등 국제기구의 공정한 선발</li>
+          </ul>
+        </div>
+
+        <div class="info-section">
+          <h3>📋 사용법</h3>
+          <ol>
+            <li><strong>추첨 설정:</strong> 추첨명, 참여인원, 당첨자 수를 설정합니다</li>
+            <li><strong>명단 업로드:</strong> CSV 파일로 참가자 정보를 업로드할 수 있습니다 (선택사항)</li>
+            <li><strong>추첨 진행:</strong> 시각적 애니메이션과 함께 공정한 추첨이 진행됩니다</li>
+            <li><strong>결과 확인:</strong> 당첨자 명단을 확인하고 CSV 파일로 다운로드할 수 있습니다</li>
+          </ol>
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-secondary" onclick="showScreen('setup')">추첨 설정으로 돌아가기</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PDF 설정 모달 -->
+    <div id="pdfSettingsModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>PDF 포함 정보 선택</h3>
+          <span class="close" onclick="closePDFSettingsModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+          <form id="pdfOptionsForm">
+            <label><input type="checkbox" name="pdfField" value="name" checked> 이름</label><br>
+            <label><input type="checkbox" name="pdfField" value="number" checked> 번호</label><br>
+            <label><input type="checkbox" name="pdfField" value="phone"> 전화번호</label><br>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closePDFSettingsModal()">취소</button>
+          <button type="button" class="btn btn-primary" onclick="downloadPDFWithOptions()">다운로드</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <button class="footer-btn" onclick="showScreen('info')">프로그램 설명</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html> 
